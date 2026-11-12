@@ -123,10 +123,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }`}
     >
       {/* Top Brand Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-slate-800 bg-slate-950/60">
-        <Building2 className="w-6 h-6 text-blue-400 mr-2.5 shrink-0" />
+      <div className="h-16 flex items-center px-4 border-b border-slate-800 bg-slate-950/60">
+        <Building2 className="w-6 h-6 text-blue-400 mr-2 shrink-0" />
         <div className="leading-tight truncate">
-          <div className="text-sm font-bold text-white tracking-wide">LEAVE PORTAL</div>
+          <div className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
+            LEAVE PORTAL by เสือโหย V.00
+          </div>
           <div className="text-[11px] text-blue-300">ระบบบริหารวันลาพนักงาน</div>
         </div>
       </div>

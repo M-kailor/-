@@ -137,8 +137,10 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
                 })}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-xl font-extrabold text-slate-900">{totalUsedAll}</span>
-                <span className="text-[10px] text-slate-400 font-medium">ชั่วโมงที่ใช้</span>
+                <span className="text-xl font-extrabold text-slate-900">
+                  {(totalUsedAll / 8).toFixed(1).replace(/\.0$/, '')} วัน
+                </span>
+                <span className="text-[10px] text-slate-500 font-semibold">({totalUsedAll} ชม.)</span>
               </div>
             </div>
 
@@ -153,7 +155,9 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
                     />
                     <span className="text-slate-700 font-medium truncate">{item.name}</span>
                   </div>
-                  <span className="font-bold text-slate-900 ml-1">{item.hours}h</span>
+                  <span className="font-bold text-slate-900 ml-1">
+                    {(item.hours / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.hours}h)
+                  </span>
                 </div>
               ))}
             </div>
@@ -171,7 +175,7 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
           <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
             เปรียบเทียบสิทธิและการใช้จริง (Entitlement vs Used)
           </h4>
-          <span className="text-[10px] text-slate-400">หน่วย: ชั่วโมง</span>
+          <span className="text-[10px] text-slate-400">หน่วย: วัน (ชั่วโมง)</span>
         </div>
 
         <div className="space-y-3.5 my-auto">
@@ -179,12 +183,19 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
             const usedPct = item.total > 0 ? (item.used / item.total) * 100 : 0;
             return (
               <div key={item.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs flex-wrap gap-1">
                   <span className="font-semibold text-slate-800">{item.name}</span>
-                  <div className="space-x-2 text-[11px]">
-                    <span className="text-amber-600 font-bold">ใช้ {item.used} ชม.</span>
-                    <span className="text-slate-400">/ สิทธิ {item.total} ชม.</span>
-                    <span className="text-emerald-600 font-semibold">(เหลือ {item.remaining})</span>
+                  <div className="space-x-1.5 text-[11px]">
+                    <span className="text-amber-600 font-bold">
+                      ใช้ {(item.used / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.used} ชม.)
+                    </span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-500">
+                      สิทธิ {(item.total / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.total} ชม.)
+                    </span>
+                    <span className="text-emerald-600 font-semibold">
+                      (เหลือ {(item.remaining / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.remaining} ชม.))
+                    </span>
                   </div>
                 </div>
 

@@ -28,7 +28,7 @@ export const EntitlementView: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingHours, setEditingHours] = useState<number>(0);
+  const [editingDays, setEditingDays] = useState<number>(0);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const activeLeaveTypes = leaveTypes.filter((lt) => lt.isActive);
@@ -45,16 +45,18 @@ export const EntitlementView: React.FC = () => {
     return true;
   });
 
-  const handleStartEdit = (empId: string, typeId: string, currentTotal: number) => {
+  const handleStartEdit = (empId: string, typeId: string, currentTotalHours: number) => {
     setEditingId(`${empId}_${typeId}`);
-    setEditingHours(currentTotal);
+    setEditingDays(currentTotalHours / 8);
   };
 
   const handleSaveEdit = (empId: string, typeId: string) => {
-    setEntitlement(empId, selectedYear, typeId, Number(editingHours) || 0);
+    const days = Number(editingDays) || 0;
+    const totalHours = days * 8;
+    setEntitlement(empId, selectedYear, typeId, totalHours);
     setEditingId(null);
-    setSuccessMsg('บันทึกสิทธิวันลาสำเร็จและคำนวณยอดคงเหลือใหม่ทันที');
-    setTimeout(() => setSuccessMsg(null), 1500);
+    setSuccessMsg(`กำหนดสิทธิ ${days} วัน (${totalHours} ชม.) สำเร็จ และคำนวณยอดคงเหลือใหม่ทันที`);
+    setTimeout(() => setSuccessMsg(null), 2500);
   };
 
   // Batch Copy Entitlements to New Year (e.g. 2028)
@@ -105,7 +107,7 @@ export const EntitlementView: React.FC = () => {
             5. กำหนดสิทธิวันลา (Leave Entitlement Management)
           </h2>
           <p className="text-xs text-slate-500">
-            กำหนดจำนวนชั่วโมงสิทธิวันลาแยกตามพนักงานและประเภทการลา • ไม่ทบยอดข้ามปี (หมดอายุ 31 ต.ค.)
+            กำหนดจำนวนวันสิทธิการลาแยกตามพนักงานและประเภทการลา (1 วัน = 8 ชม.) • ไม่ทบยอดข้ามปี (หมดอายุ 31 ต.ค.)
           </p>
         </div>
 
@@ -192,10 +194,10 @@ export const EntitlementView: React.FC = () => {
                         className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: lt.color }}
                       />
-                      <span>{lt.name} (ชม.)</span>
+                      <span>{lt.name} (วัน)</span>
                     </div>
-                    <div className="text-[9px] text-slate-400 normal-case font-normal mt-0.5">
-                      [สิทธิ / ใช้ไป / เหลือ]
+                    <div className="text-[9px] text-blue-800 font-semibold normal-case mt-0.5">
+                      [สิทธิ / ใช้ไป / เหลือ (วัน)]
                     </div>
                   </th>
                 ))}
@@ -224,36 +226,47 @@ export const EntitlementView: React.FC = () => {
                     const remaining = Math.max(0, total - used);
                     const isEditing = editingId === `${emp.id}_${lt.id}`;
 
+                    const totalDays = (total / 8).toFixed(1).replace(/\.0$/, '');
+                    const usedDays = (used / 8).toFixed(2).replace(/\.00$/, '');
+                    const remainingDays = (remaining / 8).toFixed(2).replace(/\.00$/, '');
+
                     return (
                       <td
                         key={lt.id}
-                        className="px-4 py-3 text-center border-l border-slate-100 whitespace-nowrap"
+                        className="px-3 py-3 text-center border-l border-slate-100 whitespace-nowrap"
                       >
                         {isEditing ? (
-                          <div className="flex items-center justify-center space-x-1">
-                            <input
-                              type="number"
-                              min={0}
-                              step={lt.minUnitHours}
-                              value={editingHours}
-                              onChange={(e) => setEditingHours(parseFloat(e.target.value) || 0)}
-                              className="w-16 bg-white border border-blue-500 rounded px-1.5 py-0.5 text-center font-bold text-xs focus:outline-hidden"
-                              autoFocus
-                            />
-                            <button
-                              onClick={() => handleSaveEdit(emp.id, lt.id)}
-                              className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
-                              title="บันทึก"
-                            >
-                              <Save className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="p-1 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 cursor-pointer"
-                              title="ยกเลิก"
-                            >
-                              ✕
-                            </button>
+                          <div className="flex flex-col items-center space-y-1">
+                            <div className="flex items-center justify-center space-x-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.5}
+                                value={editingDays}
+                                onChange={(e) => setEditingDays(parseFloat(e.target.value) || 0)}
+                                className="w-16 bg-white border border-blue-500 rounded px-1.5 py-0.5 text-center font-bold text-xs focus:outline-hidden"
+                                placeholder="วัน"
+                                autoFocus
+                              />
+                              <span className="text-[11px] font-bold text-slate-700">วัน</span>
+                              <button
+                                onClick={() => handleSaveEdit(emp.id, lt.id)}
+                                className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+                                title="บันทึกสิทธิ"
+                              >
+                                <Save className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="p-1 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 cursor-pointer"
+                                title="ยกเลิก"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div className="text-[10px] text-blue-700 font-medium">
+                              = {((Number(editingDays) || 0) * 8)} ชม.
+                            </div>
                           </div>
                         ) : (
                           <div
@@ -261,18 +274,21 @@ export const EntitlementView: React.FC = () => {
                             className={`p-1.5 rounded-lg inline-block transition-colors ${
                               isAdmin ? 'cursor-pointer hover:bg-blue-50/70 group' : ''
                             }`}
-                            title={isAdmin ? 'คลิกเพื่อแก้ไขจำนวนชั่วโมงสิทธิ' : undefined}
+                            title={isAdmin ? 'คลิกเพื่อกำหนดจำนวนวันสิทธิการลา' : undefined}
                           >
-                            <div className="flex items-center justify-center space-x-2 text-xs">
-                              <span className="font-extrabold text-slate-800">{total}</span>
+                            <div className="flex items-center justify-center space-x-1.5 text-xs">
+                              <span className="font-extrabold text-slate-900">{totalDays} วัน</span>
                               <span className="text-slate-300">/</span>
-                              <span className="text-amber-600 font-bold">{used}</span>
+                              <span className="text-amber-600 font-bold">{usedDays} วัน</span>
                               <span className="text-slate-300">/</span>
-                              <span className="text-emerald-700 font-extrabold">{remaining}</span>
+                              <span className="text-emerald-700 font-extrabold">{remainingDays} วัน</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              ({total} / {used} / {remaining} ชม.)
                             </div>
                             {isAdmin && (
-                              <div className="text-[9px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                คลิกเพื่อแก้สิทธิ
+                              <div className="text-[9px] text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                                คลิกเพื่อแก้ไข (กำหนดเป็นวัน)
                               </div>
                             )}
                           </div>

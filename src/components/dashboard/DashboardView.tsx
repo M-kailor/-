@@ -114,7 +114,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
           <h2 className="text-lg sm:text-xl font-extrabold text-white mt-1">
-            ยินดีต้อนรับ, {currentUser.name}
+            วันนี้มีอะไรให้เสือโหยดูแล
           </h2>
           <p className="text-xs text-slate-300 mt-0.5">
             {isAdmin
@@ -217,51 +217,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Part 3: สรุปภาพรวม (Summary Overview Cards) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Hours Used */}
+        {/* Total Days Used */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
           <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] font-medium text-slate-500">ชั่วโมงลารวม (Used Hours)</div>
+            <div className="text-[11px] font-medium text-slate-500">วันลาที่ใช้ไป (Used)</div>
             <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {totalUsedHours}{' '}
-              <span className="text-xs font-semibold text-slate-400">ชม.</span>
+              {(totalUsedHours / 8).toFixed(2).replace(/\.00$/, '')}{' '}
+              <span className="text-xs font-bold text-slate-700">วัน</span>{' '}
+              <span className="text-xs font-semibold text-amber-600">({totalUsedHours} ชม.)</span>
             </div>
             <div className="text-[10px] text-amber-600 font-medium mt-0.5">
               ใช้ไปแล้ว {overallUsedPct.toFixed(1)}% ของสิทธิ
-            </div>
-          </div>
-        </div>
-
-        {/* Equivalent Working Days */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
-            <Calendar className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500">จำนวนวันลาเทียบเท่ารวม</div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {totalEquivalentDays.toFixed(2)}{' '}
-              <span className="text-xs font-semibold text-slate-400">วัน</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">สูตร: ชั่วโมงรวม ÷ 8 ชม.</div>
-          </div>
-        </div>
-
-        {/* Total Entitlement */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500">สิทธิทั้งหมด (Total Entitled)</div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {totalEntitlementHours}{' '}
-              <span className="text-xs font-semibold text-slate-400">ชม.</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              เทียบเท่า {(totalEntitlementHours / 8).toFixed(1)} วัน
             </div>
           </div>
         </div>
@@ -274,11 +243,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="text-[11px] font-medium text-slate-500">สิทธิคงเหลือทั้งหมด (Remaining)</div>
             <div className="text-xl sm:text-2xl font-black text-emerald-700 tracking-tight">
-              {totalRemainingHours}{' '}
-              <span className="text-xs font-semibold text-emerald-500">ชม.</span>
+              {(totalRemainingHours / 8).toFixed(2).replace(/\.00$/, '')}{' '}
+              <span className="text-xs font-bold text-emerald-800">วัน</span>{' '}
+              <span className="text-xs font-semibold text-emerald-600">({totalRemainingHours} ชม.)</span>
             </div>
             <div className="text-[10px] text-emerald-600 font-medium mt-0.5">
-              คงเหลือ {((totalRemainingHours / (totalEntitlementHours || 1)) * 100).toFixed(1)}%
+              คงเหลือ {((totalRemainingHours / (totalEntitlementHours || 1)) * 100).toFixed(1)}% ของสิทธิ
+            </div>
+          </div>
+        </div>
+
+        {/* Total Entitlement */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-slate-500">สิทธิทั้งหมด (Total Entitled)</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              {(totalEntitlementHours / 8).toFixed(1).replace(/\.0$/, '')}{' '}
+              <span className="text-xs font-bold text-slate-700">วัน</span>{' '}
+              <span className="text-xs font-semibold text-slate-500">({totalEntitlementHours} ชม.)</span>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              คำนวณตาม 1 วัน = 8 ชั่วโมง
+            </div>
+          </div>
+        </div>
+
+        {/* Proportion Used */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-slate-500">สัดส่วนการใช้สิทธิวันลา</div>
+            <div className="text-xl sm:text-2xl font-black text-blue-700 tracking-tight">
+              {overallUsedPct.toFixed(1)}%
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              ใช้ {(totalUsedHours / 8).toFixed(1)} จาก {(totalEntitlementHours / 8).toFixed(1)} วัน
             </div>
           </div>
         </div>

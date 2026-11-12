@@ -41,6 +41,7 @@ interface DatabaseContextType {
 
   cancelLeaveRecord: (recordId: string, reason: string) => { success: boolean; error?: string };
   saveEmployee: (emp: Employee) => void;
+  deleteEmployee: (id: string) => { success: boolean; error?: string };
   saveLeaveType: (lt: LeaveType) => void;
   setEntitlement: (employeeId: string, year: number, typeId: string, totalHours: number) => void;
   saveHoliday: (h: Holiday) => void;
@@ -113,6 +114,10 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     dbService.saveEmployee(emp, currentUser.id, currentUser.name);
   };
 
+  const deleteEmployee = (id: string) => {
+    return dbService.deleteEmployee(id, currentUser.id, currentUser.name);
+  };
+
   const saveLeaveType = (lt: LeaveType) => {
     dbService.saveLeaveType(lt, currentUser.id, currentUser.name);
   };
@@ -156,6 +161,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createLeaveRecord,
         cancelLeaveRecord,
         saveEmployee,
+        deleteEmployee,
         saveLeaveType,
         setEntitlement,
         saveHoliday,

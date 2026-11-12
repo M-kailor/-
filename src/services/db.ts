@@ -145,6 +145,37 @@ export const dbService = {
     return employee;
   },
 
+  deleteEmployee(employeeId: string, performerId: string, performerName: string): { success: boolean; error?: string } {
+    const list = this.getEmployees();
+    const emp = list.find((e) => e.id === employeeId);
+    if (!emp) {
+      return { success: false, error: 'ไม่พบข้อมูลพนักงานในระบบ' };
+    }
+    if (emp.id === performerId) {
+      return { success: false, error: 'ไม่สามารถลบบัญชีพนักงานที่กำลังเข้าสู่ระบบอยู่ได้' };
+    }
+
+    const filtered = list.filter((e) => e.id !== employeeId);
+    setItem(DB_KEYS.EMPLOYEES, filtered);
+
+    // Clean up entitlements for this employee
+    const ents = this.getEntitlements().filter((e) => e.employeeId !== employeeId);
+    setItem(DB_KEYS.ENTITLEMENTS, ents);
+
+    this.addAuditLog({
+      action: 'CANCEL',
+      entity: 'EMPLOYEE',
+      entityId: employeeId,
+      performedBy: performerId,
+      performedByName: performerName,
+      details: `ลบพนักงานออกจากระบบ: ${emp.name} (${emp.employeeCode}) แผนก ${emp.department}`,
+      previousData: emp,
+    });
+
+    notifyListeners();
+    return { success: true };
+  },
+
   // ---------------- LEAVE TYPES ----------------
   getLeaveTypes(onlyActive = false): LeaveType[] {
     const list = getItem<LeaveType[]>(DB_KEYS.LEAVE_TYPES, []);

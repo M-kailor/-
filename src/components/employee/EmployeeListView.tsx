@@ -19,6 +19,10 @@ import {
   Mail,
   Shield,
   Clock,
+  Trash2,
+  AlertTriangle,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
@@ -34,11 +38,19 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
   onOpenEntitlements,
   onOpenLeaveModalFor,
 }) => {
-  const { employees, saveEmployee, entitlements, leaveRecords, selectedYear } = useDatabase();
-  const { isAdmin } = useAuth();
+  const { employees, saveEmployee, deleteEmployee, entitlements, leaveRecords, selectedYear } = useDatabase();
+  const { isAdmin, currentUser } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('ALL');
+
+  // Multi-selection state
+  const [selectedEmpIds, setSelectedEmpIds] = useState<string[]>([]);
+  const [deleteModalData, setDeleteModalData] = useState<{ isOpen: boolean; employees: Employee[] }>({
+    isOpen: false,
+    employees: [],
+  });
+  const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Add/Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,6 +141,76 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
     setIsModalOpen(false);
   };
 
+  const toggleSelectEmp = (id: string) => {
+    setSelectedEmpIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedEmpIds.length === filteredEmployees.length) {
+      setSelectedEmpIds([]);
+    } else {
+      setSelectedEmpIds(filteredEmployees.map((e) => e.id));
+    }
+  };
+
+  const handleOpenDeleteSingle = (emp: Employee) => {
+    setDeleteModalData({
+      isOpen: true,
+      employees: [emp],
+    });
+  };
+
+  const handleOpenDeleteSelected = () => {
+    const targets = employees.filter((e) => selectedEmpIds.includes(e.id));
+    if (targets.length === 0) return;
+    setDeleteModalData({
+      isOpen: true,
+      employees: targets,
+    });
+  };
+
+  const confirmDeleteEmployees = () => {
+    const toDelete = deleteModalData.employees;
+    if (toDelete.length === 0) return;
+
+    let successCount = 0;
+    let failedNames: string[] = [];
+
+    toDelete.forEach((emp) => {
+      const res = deleteEmployee(emp.id);
+      if (res.success) {
+        successCount++;
+      } else {
+        failedNames.push(`${emp.name} (${res.error || 'ไม่สามารถลบได้'})`);
+      }
+    });
+
+    // Remove deleted IDs from selection
+    setSelectedEmpIds((prev) =>
+      prev.filter((id) => !toDelete.some((d) => d.id === id && !failedNames.some((f) => f.includes(d.name))))
+    );
+
+    setDeleteModalData({ isOpen: false, employees: [] });
+
+    if (failedNames.length > 0) {
+      setAlertMessage({
+        type: 'error',
+        message: `ลบสำเร็จ ${successCount} คน, แต่ไม่สามารถลบได้ ${failedNames.length} คน: ${failedNames.join(', ')}`,
+      });
+    } else {
+      setAlertMessage({
+        type: 'success',
+        message: `ลบพนักงานจำนวน ${successCount} คน ออกจากระบบสำเร็จเรียบร้อยแล้ว`,
+      });
+    }
+
+    setTimeout(() => {
+      setAlertMessage(null);
+    }, 4000);
+  };
+
   return (
     <div className="space-y-5">
       {/* Top Banner */}
@@ -153,6 +235,54 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
         )}
       </div>
 
+      {/* Alert Notification */}
+      {alertMessage && (
+        <div
+          className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
+            alertMessage.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {alertMessage.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{alertMessage.message}</span>
+        </div>
+      )}
+
+      {/* Bulk Selection Action Bar (Sticky / Highlighted when items selected) */}
+      {isAdmin && selectedEmpIds.length > 0 && (
+        <div className="bg-slate-900 text-white p-3.5 sm:p-4 rounded-2xl shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              {selectedEmpIds.length}
+            </span>
+            <span className="font-semibold text-slate-200">
+              เลือกพนักงานอยู่ {selectedEmpIds.length} คน
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 text-xs">
+            <button
+              onClick={() => setSelectedEmpIds([])}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-medium transition-colors cursor-pointer"
+            >
+              ยกเลิกการเลือก
+            </button>
+            <button
+              onClick={handleOpenDeleteSelected}
+              className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors cursor-pointer flex items-center space-x-1.5 shadow-sm"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>ลบพนักงานที่เลือก ({selectedEmpIds.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filter / Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="relative flex-1 min-w-[200px]">
@@ -166,20 +296,41 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-          <span className="text-slate-500 font-medium">แผนก:</span>
-          <select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            className="bg-transparent font-medium text-slate-800 focus:outline-hidden cursor-pointer"
-          >
-            <option value="ALL">ทุกแผนก ({departments.length})</option>
-            {departments.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center space-x-2">
+          {isAdmin && (
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 font-medium cursor-pointer transition-colors"
+              title="เลือกทั้งหมด"
+            >
+              {selectedEmpIds.length === filteredEmployees.length && filteredEmployees.length > 0 ? (
+                <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+              ) : (
+                <Square className="w-3.5 h-3.5 text-slate-400" />
+              )}
+              <span>
+                {selectedEmpIds.length === filteredEmployees.length && filteredEmployees.length > 0
+                  ? 'ยกเลิกเลือกทั้งหมด'
+                  : 'เลือกทั้งหมด'}
+              </span>
+            </button>
+          )}
+
+          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+            <span className="text-slate-500 font-medium">แผนก:</span>
+            <select
+              value={filterDept}
+              onChange={(e) => setFilterDept(e.target.value)}
+              className="bg-transparent font-medium text-slate-800 focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL">ทุกแผนก ({departments.length})</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -192,15 +343,29 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
           const totalEnt = empEnts.reduce((sum, e) => sum + e.totalHours, 0);
           const usedEnt = empEnts.reduce((sum, e) => sum + e.usedHours, 0);
           const remainingEnt = Math.max(0, totalEnt - usedEnt);
+          const isSelected = selectedEmpIds.includes(emp.id);
 
           return (
             <div
               key={emp.id}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
+              className={`bg-white rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between ${
+                isSelected
+                  ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10'
+                  : 'border-slate-200'
+              }`}
             >
               <div>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectEmp(emp.id)}
+                        className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                        title="เลือกพนักงาน"
+                      />
+                    )}
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
                         emp.role === 'ADMIN' ? 'bg-indigo-600' : 'bg-blue-600'
@@ -246,11 +411,13 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
                 <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center justify-between text-[11px] mb-1">
                     <span className="text-slate-500 font-medium">สิทธิคงเหลือปี {selectedYear}:</span>
-                    <span className="font-extrabold text-emerald-700">{remainingEnt} ชม.</span>
+                    <span className="font-extrabold text-emerald-700">
+                      {(remainingEnt / 8).toFixed(2).replace(/\.00$/, '')} วัน ({remainingEnt} ชม.)
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <span>ใช้ไป {usedEnt} ชม.</span>
-                    <span>สิทธิทั้งหมด {totalEnt} ชม.</span>
+                    <span>ใช้ไป {(usedEnt / 8).toFixed(2).replace(/\.00$/, '')} วัน ({usedEnt} ชม.)</span>
+                    <span>สิทธิทั้งหมด {(totalEnt / 8).toFixed(1).replace(/\.0$/, '')} วัน ({totalEnt} ชม.)</span>
                   </div>
                 </div>
               </div>
@@ -266,13 +433,25 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
                 </button>
 
                 {isAdmin && (
-                  <button
-                    onClick={() => handleOpenEdit(emp)}
-                    className="inline-flex items-center text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
-                  >
-                    <Edit className="w-3.5 h-3.5 mr-1" />
-                    <span>แก้ไข</span>
-                  </button>
+                  <div className="flex items-center space-x-2.5">
+                    <button
+                      onClick={() => handleOpenEdit(emp)}
+                      className="inline-flex items-center text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
+                      title="แก้ไขข้อมูลพนักงาน"
+                    >
+                      <Edit className="w-3.5 h-3.5 mr-1" />
+                      <span>แก้ไข</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenDeleteSingle(emp)}
+                      className="inline-flex items-center text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+                      title="ลบพนักงาน"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      <span>ลบ</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -324,12 +503,12 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
                             {ent.leaveTypeId.replace('LT_', '')}
                           </span>
                           <span className="font-bold text-emerald-700">
-                            คงเหลือ {ent.remainingHours} ชม.
+                            คงเหลือ {(ent.remainingHours / 8).toFixed(2).replace(/\.00$/, '')} วัน ({ent.remainingHours} ชม.)
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span>ใช้ไป {ent.usedHours} ชม.</span>
-                          <span>สิทธิทั้งหมด {ent.totalHours} ชม.</span>
+                          <span>ใช้ไป {(ent.usedHours / 8).toFixed(2).replace(/\.00$/, '')} วัน ({ent.usedHours} ชม.)</span>
+                          <span>สิทธิทั้งหมด {(ent.totalHours / 8).toFixed(1).replace(/\.0$/, '')} วัน ({ent.totalHours} ชม.)</span>
                         </div>
                         <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                           <div
@@ -505,6 +684,85 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalData.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-rose-900 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5 text-rose-300" />
+                <h4 className="text-sm font-bold">ยืนยันการลบพนักงาน (Confirm Deletion)</h4>
+              </div>
+              <button
+                onClick={() => setDeleteModalData({ isOpen: false, employees: [] })}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-700 leading-relaxed">
+                คุณแน่ใจหรือไม่ว่าต้องการลบพนักงานจำนวน{' '}
+                <strong className="text-rose-700 font-bold">{deleteModalData.employees.length} คน</strong>{' '}
+                ต่อไปนี้ออกจากระบบ?
+              </p>
+
+              {/* List of selected employees */}
+              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/70">
+                {deleteModalData.employees.map((emp) => {
+                  const isCurrent = emp.id === currentUser.id;
+                  return (
+                    <div key={emp.id} className="p-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                          <span>{emp.name}</span>
+                          <span className="text-[10px] text-blue-700">({emp.employeeCode})</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">{emp.department} • {emp.position}</div>
+                      </div>
+                      {isCurrent && (
+                        <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                          กำลังเข้าใช้งาน (ไม่สามารถลบได้)
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {deleteModalData.employees.some((emp) => emp.id === currentUser.id) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed">
+                  ⚠️ มีบัญชีของคุณที่กำลังล็อกอินใช้งานอยู่ ระบบจะข้ามการลบบัญชีนี้ และลบเฉพาะพนักงานคนอื่นที่เลือก
+                </div>
+              )}
+
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px] leading-relaxed">
+                <strong>คำเตือน:</strong> การลบพนักงานจะนำข้อมูลและสิทธิวันลาออกจากระบบอย่างถาวร (บันทึกใน Audit Log) และไม่สามารถกู้คืนได้
+              </div>
+
+              <div className="flex items-center justify-end space-x-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteModalData({ isOpen: false, employees: [] })}
+                  className="px-3.5 py-2 border border-slate-300 rounded-xl text-slate-700 font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteEmployees}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-xs transition-colors cursor-pointer flex items-center space-x-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>ยืนยันการลบ</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

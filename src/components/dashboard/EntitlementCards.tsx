@@ -75,16 +75,16 @@ export const EntitlementCards: React.FC<EntitlementCardsProps> = ({
                 {/* Main Stats: Remaining vs Total */}
                 <div className="my-2">
                   <div className="text-[11px] text-slate-500 font-medium">สิทธิคงเหลือ (Remaining)</div>
-                  <div className="flex items-baseline space-x-2">
+                  <div className="flex items-baseline space-x-1.5 flex-wrap">
                     <span className="text-2xl font-black text-slate-900 tracking-tight">
-                      {remainingHours}
+                      {(remainingHours / 8).toFixed(2).replace(/\.00$/, '')} วัน
                     </span>
-                    <span className="text-xs font-semibold text-slate-400">
-                      / สิทธิทั้งหมด {totalHours} ชม.
+                    <span className="text-xs font-semibold text-emerald-600">
+                      ({remainingHours} ชม.)
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    เทียบเท่า {(remainingHours / 8).toFixed(2)} วันทำงาน
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    สิทธิทั้งหมด {(totalHours / 8).toFixed(1).replace(/\.0$/, '')} วัน ({totalHours} ชม.)
                   </div>
                 </div>
               </div>
@@ -94,7 +94,7 @@ export const EntitlementCards: React.FC<EntitlementCardsProps> = ({
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">ใช้ไปแล้ว:</span>
                   <span className="font-bold text-amber-600">
-                    {usedHours} ชม. ({(usedHours / 8).toFixed(2)} วัน)
+                    {(usedHours / 8).toFixed(2).replace(/\.00$/, '')} วัน ({usedHours} ชม.)
                   </span>
                 </div>
 
