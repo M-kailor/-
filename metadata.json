@@ -1,0 +1,6 @@
+{
+  "name": "ระบบบริหารจัดการและบันทึกวันลาพนักงาน (Leave Management System)",
+  "description": "ระบบบริหารจัดการวันลาพนักงาน คำนวณชั่วโมงและสิทธิวันลาอัตโนมัติ ตัดวันหยุดและวันหยุดบริษัท พร้อม Dashboard, ปฏิทิน และรายงานสรุป",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
