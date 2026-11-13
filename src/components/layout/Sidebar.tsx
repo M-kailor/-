@@ -39,6 +39,7 @@ interface SidebarProps {
   onSelectTab: (tab: NavigationTab) => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  isShareMode?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   isMobileOpen = false,
   onCloseMobile,
+  isShareMode = false,
 }) => {
   const { role, currentUser } = useAuth();
   const isAdmin = role === 'ADMIN';
@@ -127,9 +129,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <Building2 className="w-6 h-6 text-blue-400 mr-2 shrink-0" />
         <div className="leading-tight truncate">
           <div className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
-            LEAVE PORTAL by เสือโหย V.00
+            วันลาของเสือ
           </div>
-          <div className="text-[11px] text-blue-300">ระบบบริหารวันลาพนักงาน</div>
+          <div className="text-[11px] text-blue-300">พัฒนาโดย เสือโหย</div>
         </div>
       </div>
 
@@ -164,7 +166,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {navItems.map((item) => {
-          if (item.adminOnly && !isAdmin) return null;
+          if (item.adminOnly && (!isAdmin || isShareMode)) return null;
+          if (isShareMode && item.id === 'request_leave') return null;
           const isActive = currentTab === item.id;
           const Icon = item.icon;
 

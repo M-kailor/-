@@ -56,17 +56,10 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
 
-  // Form State
+  // Form State (only employeeCode and name required by user; other fields preserved/defaulted)
   const [formData, setFormData] = useState({
     employeeCode: '',
     name: '',
-    email: '',
-    department: 'Information Technology',
-    position: '',
-    startDate: new Date().toISOString().slice(0, 10),
-    status: 'ACTIVE' as Employee['status'],
-    role: 'EMPLOYEE' as UserRole,
-    phone: '',
   });
 
   // Individual Balance Drawer Modal
@@ -80,9 +73,7 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
       const q = searchTerm.toLowerCase();
       const mCode = emp.employeeCode.toLowerCase().includes(q);
       const mName = emp.name.toLowerCase().includes(q);
-      const mDept = emp.department.toLowerCase().includes(q);
-      const mPos = emp.position.toLowerCase().includes(q);
-      if (!mCode && !mName && !mDept && !mPos) return false;
+      if (!mCode && !mName) return false;
     }
     return true;
   });
@@ -93,13 +84,6 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
     setFormData({
       employeeCode: nextCode,
       name: '',
-      email: '',
-      department: 'Information Technology',
-      position: '',
-      startDate: new Date().toISOString().slice(0, 10),
-      status: 'ACTIVE',
-      role: 'EMPLOYEE',
-      phone: '',
     });
     setIsModalOpen(true);
   };
@@ -109,13 +93,6 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
     setFormData({
       employeeCode: emp.employeeCode,
       name: emp.name,
-      email: emp.email,
-      department: emp.department,
-      position: emp.position,
-      startDate: emp.startDate,
-      status: emp.status,
-      role: emp.role,
-      phone: emp.phone || '',
     });
     setIsModalOpen(true);
   };
@@ -128,13 +105,13 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
       id: editingEmp ? editingEmp.id : `EMP_${Date.now()}`,
       employeeCode: formData.employeeCode.trim(),
       name: formData.name.trim(),
-      email: formData.email.trim(),
-      department: formData.department.trim(),
-      position: formData.position.trim(),
-      startDate: formData.startDate,
-      status: formData.status,
-      role: formData.role,
-      phone: formData.phone.trim(),
+      email: editingEmp ? editingEmp.email : '',
+      department: editingEmp ? editingEmp.department : 'ทั่วไป',
+      position: editingEmp ? editingEmp.position : 'พนักงาน',
+      startDate: editingEmp ? editingEmp.startDate : new Date().toISOString().slice(0, 10),
+      status: editingEmp ? editingEmp.status : 'ACTIVE',
+      role: editingEmp ? editingEmp.role : 'EMPLOYEE',
+      phone: editingEmp ? editingEmp.phone : '',
     };
 
     saveEmployee(empToSave);
@@ -550,35 +527,19 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    รหัสพนักงาน <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.employeeCode}
-                    onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    บทบาทผู้ใช้ (Role)
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value as UserRole })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                  >
-                    <option value="EMPLOYEE">พนักงาน (Employee)</option>
-                    <option value="ADMIN">ผู้ดูแลระบบ (Admin)</option>
-                  </select>
-                </div>
+            <form onSubmit={handleSave} className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  รหัสพนักงาน <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.employeeCode}
+                  onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
+                  placeholder="เช่น EMP005"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  required
+                />
               </div>
 
               <div>
@@ -590,82 +551,9 @@ export const EmployeeListView: React.FC<EmployeeListViewProps> = ({
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="เช่น สมชาย ใจดี"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                   required
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">แผนก</label>
-                  <input
-                    type="text"
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">ตำแหน่ง</label>
-                  <input
-                    type="text"
-                    value={formData.position}
-                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">อีเมล</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">เบอร์โทรศัพท์</label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">วันที่เริ่มงาน</label>
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">สถานะ</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        status: e.target.value as Employee['status'],
-                      })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
-                  >
-                    <option value="ACTIVE">ACTIVE (ปฏิบัติงาน)</option>
-                    <option value="PROBATION">PROBATION (ทดลองงาน)</option>
-                    <option value="RESIGNED">RESIGNED (ลาออก)</option>
-                  </select>
-                </div>
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">

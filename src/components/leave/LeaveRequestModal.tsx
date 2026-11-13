@@ -19,7 +19,15 @@ import {
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
-import { calculateLeave, formatDateThai, getLeaveYear } from '../../services/calculationEngine';
+import {
+  calculateLeave,
+  findHoliday,
+  formatDateThai,
+  getDateRange,
+  getLeaveYear,
+  getThaiDayOfWeek,
+  isWeekend,
+} from '../../services/calculationEngine';
 
 interface LeaveRequestModalProps {
   isOpen: boolean;
@@ -43,9 +51,9 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
     createLeaveRecord,
   } = useDatabase();
 
-  // Employee Selection (Admin can choose for anyone, Employee records for self)
+  // Employee Selection (Admin defaults to Admin/currentUser, can choose anyone)
   const [selectedEmpId, setSelectedEmpId] = useState<string>(
-    initialEmployeeId || (isAdmin ? 'EMP_A' : currentUser.id)
+    initialEmployeeId || currentUser.id
   );
 
   // Leave Type
@@ -65,6 +73,10 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   const [durationPreset, setDurationPreset] = useState<'FULL' | 'MORNING' | 'AFTERNOON' | 'CUSTOM'>('FULL');
   const [customHours, setCustomHours] = useState<number>(4);
 
+  // Multi-day per-date configuration
+  type DayMode = 'FULL' | 'HALF_MORNING' | 'HALF_AFTERNOON' | 'CUSTOM';
+  const [dayConfigs, setDayConfigs] = useState<Record<string, { mode: DayMode; hours: number }>>({});
+
   // Reason
   const [reason, setReason] = useState<string>('');
 
@@ -75,7 +87,7 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   // Reset or initialize on open
   useEffect(() => {
     if (isOpen) {
-      setSelectedEmpId(initialEmployeeId || (isAdmin ? 'EMP_A' : currentUser.id));
+      setSelectedEmpId(initialEmployeeId || currentUser.id);
       setSubmissionError(null);
       setSubmissionSuccess(null);
     }
@@ -87,6 +99,7 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   const currentLeaveType = leaveTypes.find((lt) => lt.id === selectedTypeId) || activeLeaveTypes[0];
 
   const isSingleDay = startDate === endDate;
+  const dateRangeList = startDate && endDate && startDate <= endDate ? getDateRange(startDate, endDate) : [];
 
   // Determine hours for single day based on preset
   let effectiveCustomHours: number | undefined = undefined;
@@ -102,6 +115,17 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
     }
   }
 
+  // Build per-day override map for multi-day requests
+  const customHoursByDate: Record<string, number> | undefined = !isSingleDay
+    ? dateRangeList.reduce<Record<string, number>>((acc, dateStr) => {
+        if (!isWeekend(dateStr) && !findHoliday(dateStr, holidays)) {
+          const cfg = dayConfigs[dateStr];
+          acc[dateStr] = cfg ? cfg.hours : 8;
+        }
+        return acc;
+      }, {})
+    : undefined;
+
   // Real-time calculation engine preview
   const calcResult = calculateLeave({
     startDate,
@@ -111,6 +135,7 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
     leaveType: currentLeaveType,
     holidays,
     customHours: effectiveCustomHours,
+    customHoursByDate,
   });
 
   // Fetch current entitlement
@@ -153,6 +178,7 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
       endTime,
       reason: reason.trim() || 'ไม่ได้ระบุเหตุผล',
       customHours: effectiveCustomHours,
+      customHoursByDate,
     });
 
     if (res.success && res.record) {
@@ -411,11 +437,138 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
               )}
             </div>
           ) : (
-            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-center space-x-2">
-              <Info className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>
-                การลาหลายวันติดต่อกัน: ระบบจะคำนวณวันละ 8 ชั่วโมงเฉพาะวันทำงานปกติ และตัดวันหยุดเสาร์-อาทิตย์ รวมถึงวันหยุดบริษัทออกอัตโนมัติ
-              </span>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-700" />
+                  <span>กำหนดชั่วโมงการลาแยกรายวัน ({dateRangeList.length} วัน)</span>
+                </label>
+                <span className="text-[10px] text-slate-500">
+                  เลือกได้แต่ละวัน: เต็มวัน / ครึ่งวัน / กำหนดชม. เอง
+                </span>
+              </div>
+
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {dateRangeList.map((dateStr) => {
+                  const [y, m, d] = dateStr.split('-').map(Number);
+                  const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+                  const dayName = getThaiDayOfWeek(dateObj);
+                  const weekend = isWeekend(dateStr);
+                  const holiday = findHoliday(dateStr, holidays);
+                  const isOffDay = weekend || !!holiday;
+                  const cfg = dayConfigs[dateStr] || { mode: 'FULL' as DayMode, hours: 8 };
+
+                  const updateDay = (mode: DayMode, hours: number) => {
+                    setDayConfigs((prev) => ({
+                      ...prev,
+                      [dateStr]: { mode, hours },
+                    }));
+                  };
+
+                  return (
+                    <div
+                      key={dateStr}
+                      className={`p-2.5 rounded-xl border text-xs ${
+                        isOffDay
+                          ? 'bg-slate-100/80 border-slate-200 text-slate-400'
+                          : 'bg-white border-slate-200 text-slate-800'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-900">
+                            {formatDateThai(dateStr)}
+                          </span>
+                          <span className="text-[11px] text-slate-500">({dayName})</span>
+                          {isOffDay && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600">
+                              {holiday ? `วันหยุด: ${holiday.name}` : 'วันหยุดสุดสัปดาห์'} (0 ชม.)
+                            </span>
+                          )}
+                        </div>
+
+                        {!isOffDay && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => updateDay('FULL', 8)}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${
+                                cfg.mode === 'FULL'
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              เต็มวัน (8 ชม.)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateDay('HALF_MORNING', 4)}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${
+                                cfg.mode === 'HALF_MORNING'
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              เช้า (4 ชม.)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateDay('HALF_AFTERNOON', 4)}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${
+                                cfg.mode === 'HALF_AFTERNOON'
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              บ่าย (4 ชม.)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDay(
+                                  'CUSTOM',
+                                  cfg.mode === 'CUSTOM'
+                                    ? cfg.hours
+                                    : currentLeaveType.minUnitHours || 1
+                                )
+                              }
+                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${
+                                cfg.mode === 'CUSTOM'
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              กำหนดเอง
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {!isOffDay && cfg.mode === 'CUSTOM' && (
+                        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-slate-500">
+                            ระบุชั่วโมง (ขั้นต่ำ {currentLeaveType.minUnitHours} ชม., สูงสุด 8 ชม.)
+                          </span>
+                          <div className="flex items-center space-x-1.5">
+                            <input
+                              type="number"
+                              step={currentLeaveType.minUnitHours}
+                              min={currentLeaveType.minUnitHours}
+                              max={8}
+                              value={cfg.hours}
+                              onChange={(e) =>
+                                updateDay('CUSTOM', parseFloat(e.target.value) || 0)
+                              }
+                              className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-blue-900 text-right focus:outline-hidden"
+                            />
+                            <span className="text-[11px] font-semibold text-slate-600">ชม.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

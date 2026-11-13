@@ -208,7 +208,7 @@ export const LeaveTypeView: React.FC = () => {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="เช่น พักร้อน, กิจธุระ, ลาคลอด"
+                  placeholder="เช่น พักร้อน, กิจธุระ, ลาป่วย"
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden"
                   required
                 />

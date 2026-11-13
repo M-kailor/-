@@ -27,10 +27,14 @@ import { LeaveRecord } from '../../types';
 
 interface LeaveHistoryViewProps {
   onOpenLeaveModal: () => void;
+  isShareMode?: boolean;
 }
 
-export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveModal }) => {
-  const { role, currentUser, isAdmin } = useAuth();
+export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({
+  onOpenLeaveModal,
+  isShareMode = false,
+}) => {
+  const { currentUser, isAdmin } = useAuth();
   const {
     employees,
     leaveTypes,
@@ -39,6 +43,7 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
     setSelectedYear,
     availableYears,
     cancelLeaveRecord,
+    clearDemoData,
   } = useDatabase();
 
   // Filters
@@ -57,6 +62,12 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
+
+  // Clear Demo Data Modal State
+  const [isClearDemoOpen, setIsClearDemoOpen] = useState(false);
+  const [clearAllRecords, setClearAllRecords] = useState(false);
+  const [removeDemoEmployees, setRemoveDemoEmployees] = useState(false);
+  const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   // Filter records
   const filtered = leaveRecords.filter((rec) => {
@@ -137,7 +148,7 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Export Dropdown / Buttons */}
           <button
             onClick={handleExportExcel}
@@ -166,14 +177,34 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
             <span>PDF</span>
           </button>
 
-          <button
-            onClick={onOpenLeaveModal}
-            className="inline-flex items-center px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-          >
-            + บันทึกวันลา
-          </button>
+          {isAdmin && !isShareMode && (
+            <button
+              onClick={() => setIsClearDemoOpen(true)}
+              className="inline-flex items-center px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+              title="ลบข้อมูล Demo ออกเพื่อเริ่มใช้งานจริง"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              <span>ล้างข้อมูล Demo</span>
+            </button>
+          )}
+
+          {!isShareMode && (
+            <button
+              onClick={onOpenLeaveModal}
+              className="inline-flex items-center px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              + บันทึกวันลา
+            </button>
+          )}
         </div>
       </div>
+
+      {demoNotice && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{demoNotice}</span>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -285,7 +316,9 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
                 filtered.map((rec) => {
                   const isCompleted = rec.status === 'COMPLETED';
                   const canCancel =
-                    isCompleted && (isAdmin || rec.employeeId === currentUser.id);
+                    !isShareMode &&
+                    isCompleted &&
+                    (isAdmin || rec.employeeId === currentUser.id);
 
                   return (
                     <tr
@@ -564,6 +597,99 @@ export const LeaveHistoryView: React.FC<LeaveHistoryViewProps> = ({ onOpenLeaveM
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>ยืนยันยกเลิกและคืนสิทธิ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal: Clear Demo Data for Production */}
+      {isClearDemoOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div className="bg-amber-700 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Trash2 className="w-5 h-5 text-amber-200" />
+                <h4 className="text-sm font-bold">ล้างข้อมูล Demo เพื่อเริ่มใช้งานจริง</h4>
+              </div>
+              <button
+                onClick={() => setIsClearDemoOpen(false)}
+                className="text-amber-100 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                ระบบจะลบประวัติการลาที่เป็นข้อมูลตัวอย่าง (Demo) และคำนวณยอดวันลาคงเหลือใหม่ให้ตรงกับข้อมูลจริงโดยอัตโนมัติ
+              </p>
+
+              <div className="space-y-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <label className="flex items-start space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clearAllRecords}
+                    onChange={(e) => setClearAllRecords(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600"
+                  />
+                  <div>
+                    <div className="font-semibold text-slate-900">
+                      ล้างประวัติการลาทั้งหมดในระบบ (แทนการลบเฉพาะรายการ Demo)
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      รีเซ็ตยอดใช้ไปของพนักงานทุกคนให้เป็น 0 ชั่วโมงเพื่อเริ่มนับใหม่
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-start space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={removeDemoEmployees}
+                    onChange={(e) => setRemoveDemoEmployees(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600"
+                  />
+                  <div>
+                    <div className="font-semibold text-slate-900">
+                      ลบรายชื่อพนักงานตัวอย่าง (สมชาย, สมศรี, กิตติศักดิ์, วรรณภา)
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      คงไว้เฉพาะผู้ดูแลระบบ (Admin) และพนักงานที่คุณเพิ่มเอง
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end space-x-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsClearDemoOpen(false)}
+                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = clearDemoData({
+                      clearAllLeaveRecords: clearAllRecords,
+                      removeDemoEmployees,
+                    });
+                    setIsClearDemoOpen(false);
+                    setDemoNotice(
+                      `ล้างข้อมูล Demo เรียบร้อยแล้ว (ลบประวัติการลา ${res.removedRecords} รายการ${
+                        res.removedEmployees > 0
+                          ? `, ลบพนักงานตัวอย่าง ${res.removedEmployees} คน`
+                          : ''
+                      })`
+                    );
+                    setTimeout(() => setDemoNotice(null), 5000);
+                  }}
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-xs cursor-pointer flex items-center space-x-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>ยืนยันล้างข้อมูล Demo</span>
                 </button>
               </div>
             </div>

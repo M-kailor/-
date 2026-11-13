@@ -36,16 +36,6 @@ export const INITIAL_LEAVE_TYPES: LeaveType[] = [
     isActive: true,
     order: 3,
   },
-  {
-    id: 'LT_MATERNITY',
-    code: 'MATERNITY',
-    name: 'ลาคลอดบุตร',
-    minUnitHours: 8,
-    description: 'ลาเพื่อคลอดบุตรตามกฎหมายแรงงาน',
-    color: '#9333ea', // Purple
-    isActive: true,
-    order: 4,
-  },
 ];
 
 export const INITIAL_EMPLOYEES: Employee[] = [
@@ -153,6 +143,38 @@ export const INITIAL_HOLIDAYS: Holiday[] = [
 ];
 
 export const INITIAL_ENTITLEMENTS_2027: LeaveEntitlement[] = [
+  // HR Admin (ผู้ดูแลระบบ)
+  {
+    id: 'EMP_ADMIN_2027_LT_ANNUAL',
+    employeeId: 'EMP_ADMIN',
+    leaveYear: 2027,
+    leaveTypeId: 'LT_ANNUAL',
+    totalHours: 80,
+    usedHours: 0,
+    remainingHours: 80,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'EMP_ADMIN_2027_LT_BUSINESS',
+    employeeId: 'EMP_ADMIN',
+    leaveYear: 2027,
+    leaveTypeId: 'LT_BUSINESS',
+    totalHours: 24,
+    usedHours: 0,
+    remainingHours: 24,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'EMP_ADMIN_2027_LT_SICK',
+    employeeId: 'EMP_ADMIN',
+    leaveYear: 2027,
+    leaveTypeId: 'LT_SICK',
+    totalHours: 80,
+    usedHours: 0,
+    remainingHours: 80,
+    updatedAt: new Date().toISOString(),
+  },
+
   // Employee A (พนักงาน A)
   // พักร้อน 80 ชม., กิจธุระ 24 ชม., ลาป่วย 80 ชม.
   {

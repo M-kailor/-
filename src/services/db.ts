@@ -69,6 +69,198 @@ function setItem<T>(key: string, value: T): void {
   }
 }
 
+const CLIENT_ID = `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+let realtimeConnected = false;
+let lastSyncedAt = 0;
+let isApplyingRemoteState = false;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+type SyncStatusCallback = (status: { connected: boolean; lastSyncedAt: number }) => void;
+const syncStatusListeners: Set<SyncStatusCallback> = new Set();
+
+export function subscribeToSyncStatus(callback: SyncStatusCallback): () => void {
+  syncStatusListeners.add(callback);
+  callback({ connected: realtimeConnected, lastSyncedAt });
+  return () => {
+    syncStatusListeners.delete(callback);
+  };
+}
+
+function notifySyncStatus() {
+  syncStatusListeners.forEach((cb) => {
+    try {
+      cb({ connected: realtimeConnected, lastSyncedAt });
+    } catch {
+      // ignore listener errors
+    }
+  });
+}
+
+function getFullSnapshot() {
+  return {
+    employees: getItem<Employee[]>(DB_KEYS.EMPLOYEES, []),
+    leaveTypes: getItem<LeaveType[]>(DB_KEYS.LEAVE_TYPES, []),
+    entitlements: getItem<LeaveEntitlement[]>(DB_KEYS.ENTITLEMENTS, []),
+    leaveRecords: getItem<LeaveRecord[]>(DB_KEYS.LEAVE_RECORDS, []),
+    holidays: getItem<Holiday[]>(DB_KEYS.HOLIDAYS, []),
+    auditLogs: getItem<AuditLog[]>(DB_KEYS.AUDIT_LOGS, []),
+  };
+}
+
+function applyMigrationRules(snapshot: ReturnType<typeof getFullSnapshot>) {
+  let changed = false;
+
+  // 1. Remove LT_MATERNITY if present
+  const filteredTypes = snapshot.leaveTypes.filter((lt) => lt.id !== 'LT_MATERNITY');
+  if (filteredTypes.length !== snapshot.leaveTypes.length) {
+    snapshot.leaveTypes = filteredTypes;
+    changed = true;
+  }
+
+  const filteredEnts = snapshot.entitlements.filter((ent) => ent.leaveTypeId !== 'LT_MATERNITY');
+  if (filteredEnts.length !== snapshot.entitlements.length) {
+    snapshot.entitlements = filteredEnts;
+    changed = true;
+  }
+
+  // 2. Ensure EMP_ADMIN has default 2027 entitlements if EMP_ADMIN exists and has none
+  const hasAdmin = snapshot.employees.some((e) => e.id === 'EMP_ADMIN');
+  if (hasAdmin) {
+    const admin2027 = INITIAL_ENTITLEMENTS_2027.filter((e) => e.employeeId === 'EMP_ADMIN');
+    for (const defaultEnt of admin2027) {
+      const exists = snapshot.entitlements.some((e) => e.id === defaultEnt.id);
+      if (!exists) {
+        snapshot.entitlements.push(defaultEnt);
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+function persistSnapshotToLocal(snapshot: ReturnType<typeof getFullSnapshot>) {
+  setItem(DB_KEYS.EMPLOYEES, snapshot.employees);
+  setItem(DB_KEYS.LEAVE_TYPES, snapshot.leaveTypes);
+  setItem(DB_KEYS.ENTITLEMENTS, snapshot.entitlements);
+  setItem(DB_KEYS.LEAVE_RECORDS, snapshot.leaveRecords);
+  setItem(DB_KEYS.HOLIDAYS, snapshot.holidays);
+  setItem(DB_KEYS.AUDIT_LOGS, snapshot.auditLogs);
+  localStorage.setItem(DB_KEYS.INITIALIZED, 'true');
+}
+
+function scheduleServerPush() {
+  if (typeof window === 'undefined' || isApplyingRemoteState) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    void pushSnapshotToServer();
+  }, 80);
+}
+
+async function pushSnapshotToServer(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const snapshot = getFullSnapshot();
+    const res = await fetch('/api/db', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: snapshot,
+        sourceClientId: CLIENT_ID,
+      }),
+    });
+    if (res.ok) {
+      const result = (await res.json()) as { updatedAt?: number };
+      if (result.updatedAt) {
+        lastSyncedAt = result.updatedAt;
+        notifySyncStatus();
+      }
+    }
+  } catch (err) {
+    console.warn('Background server sync skipped:', err);
+  }
+}
+
+export async function pullSnapshotFromServer(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/db', { cache: 'no-store' });
+    if (!res.ok) return;
+    const payload = (await res.json()) as {
+      data: ReturnType<typeof getFullSnapshot> | null;
+      updatedAt: number;
+    };
+
+    if (payload.data) {
+      isApplyingRemoteState = true;
+      try {
+        applyMigrationRules(payload.data);
+        persistSnapshotToLocal(payload.data);
+        lastSyncedAt = payload.updatedAt || Date.now();
+        notifyListeners();
+        notifySyncStatus();
+      } finally {
+        isApplyingRemoteState = false;
+      }
+    } else {
+      // Server uninitialized -> seed server from our initialized local snapshot
+      await pushSnapshotToServer();
+    }
+  } catch (err) {
+    console.warn('Initial pull from server skipped:', err);
+  }
+}
+
+function initRealtimeSync() {
+  if (typeof window === 'undefined') return;
+  void pullSnapshotFromServer();
+
+  let eventSource: EventSource | null = null;
+  const connectSSE = () => {
+    try {
+      eventSource = new EventSource('/api/stream');
+      eventSource.addEventListener('connected', () => {
+        realtimeConnected = true;
+        notifySyncStatus();
+      });
+      eventSource.addEventListener('db_update', (ev) => {
+        try {
+          const info = JSON.parse((ev as MessageEvent).data) as {
+            updatedAt?: number;
+            sourceClientId?: string | null;
+          };
+          if (info.sourceClientId === CLIENT_ID) {
+            if (info.updatedAt) {
+              lastSyncedAt = info.updatedAt;
+              notifySyncStatus();
+            }
+            return;
+          }
+          void pullSnapshotFromServer();
+        } catch {
+          void pullSnapshotFromServer();
+        }
+      });
+      eventSource.onerror = () => {
+        realtimeConnected = false;
+        notifySyncStatus();
+      };
+    } catch {
+      realtimeConnected = false;
+      notifySyncStatus();
+    }
+  };
+
+  connectSSE();
+
+  // Lightweight fallback sync if SSE is unavailable
+  setInterval(() => {
+    if (!realtimeConnected) {
+      void pullSnapshotFromServer();
+    }
+  }, 8000);
+}
+
 /**
  * Initialize Database with Seed Data if empty
  */
@@ -96,11 +288,22 @@ export function initDatabase(forceReset = false): void {
     setItem(DB_KEYS.AUDIT_LOGS, initialAudit);
     localStorage.setItem(DB_KEYS.INITIALIZED, 'true');
     notifyListeners();
+    if (forceReset) {
+      scheduleServerPush();
+    }
+  } else {
+    const snap = getFullSnapshot();
+    if (applyMigrationRules(snap)) {
+      persistSnapshotToLocal(snap);
+      notifyListeners();
+      scheduleServerPush();
+    }
   }
 }
 
 // Ensure database is initialized at startup
 initDatabase();
+initRealtimeSync();
 
 export const dbService = {
   // ---------------- EMPLOYEES ----------------
@@ -142,6 +345,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return employee;
   },
 
@@ -173,6 +377,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return { success: true };
   },
 
@@ -216,6 +421,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return leaveType;
   },
 
@@ -255,6 +461,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return holiday;
   },
 
@@ -277,6 +484,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return true;
   },
 
@@ -353,6 +561,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return ent;
   },
 
@@ -394,6 +603,7 @@ export const dbService = {
       endTime?: string;
       reason: string;
       customHours?: number;
+      customHoursByDate?: Record<string, number>;
     },
     performerId: string,
     performerName: string
@@ -423,6 +633,7 @@ export const dbService = {
       leaveType,
       holidays,
       customHours: params.customHours,
+      customHoursByDate: params.customHoursByDate,
     });
 
     if (!calc.isValid) {
@@ -520,6 +731,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return { success: true, record: newRecord };
   },
 
@@ -589,6 +801,7 @@ export const dbService = {
     });
 
     notifyListeners();
+    scheduleServerPush();
     return { success: true };
   },
 
@@ -636,15 +849,85 @@ export const dbService = {
       setItem(DB_KEYS.HOLIDAYS, data.holidays || []);
       setItem(DB_KEYS.AUDIT_LOGS, data.auditLogs || []);
       notifyListeners();
+      scheduleServerPush();
       return { success: true };
     } catch (e) {
       return { success: false, error: `เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${String(e)}` };
     }
   },
 
-  resetDatabase(useDemo = true): void {
+  clearDemoData(
+    options: { clearAllLeaveRecords?: boolean; removeDemoEmployees?: boolean } = {},
+    performerId = 'ADM001',
+    performerName = 'Admin'
+  ): { removedRecords: number; removedEmployees: number } {
+    const demoRecordIds = new Set(INITIAL_LEAVE_RECORDS.map((r) => r.id));
+    const demoEmployeeIds = new Set(
+      INITIAL_EMPLOYEES.filter((e) => e.id !== 'EMP_ADMIN').map((e) => e.id)
+    );
+
+    const currentRecords = this.getLeaveRecords();
+    const remainingRecords = options.clearAllLeaveRecords
+      ? []
+      : currentRecords.filter((r) => !demoRecordIds.has(r.id));
+    const removedRecords = currentRecords.length - remainingRecords.length;
+
+    let currentEmployees = this.getEmployees();
+    let removedEmployees = 0;
+    if (options.removeDemoEmployees) {
+      const nextEmployees = currentEmployees.filter((e) => !demoEmployeeIds.has(e.id));
+      removedEmployees = currentEmployees.length - nextEmployees.length;
+      currentEmployees = nextEmployees;
+      setItem(DB_KEYS.EMPLOYEES, currentEmployees);
+    }
+
+    const activeEmpIdSet = new Set(currentEmployees.map((e) => e.id));
+    const finalRecords = remainingRecords.filter((r) => activeEmpIdSet.has(r.employeeId));
+    setItem(DB_KEYS.LEAVE_RECORDS, finalRecords);
+
+    // Recalculate usedHours and remainingHours from actual COMPLETED leave records
+    const currentEntitlements = this.getEntitlements().filter((ent) =>
+      activeEmpIdSet.has(ent.employeeId)
+    );
+    const recalculatedEntitlements = currentEntitlements.map((ent) => {
+      const used = finalRecords
+        .filter(
+          (r) =>
+            r.status === 'COMPLETED' &&
+            r.employeeId === ent.employeeId &&
+            r.leaveYear === ent.leaveYear &&
+            r.leaveTypeId === ent.leaveTypeId
+        )
+        .reduce((sum, r) => sum + r.totalHours, 0);
+      return {
+        ...ent,
+        usedHours: used,
+        remainingHours: ent.totalHours - used,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    setItem(DB_KEYS.ENTITLEMENTS, recalculatedEntitlements);
+
+    this.addAuditLog({
+      action: 'SYSTEM_RESET',
+      entity: 'LEAVE_RECORD',
+      entityId: 'DEMO_CLEANUP',
+      performedBy: performerId,
+      performedByName: performerName,
+      details: `ล้างข้อมูล Demo เพื่อเริ่มใช้งานจริง: ลบประวัติการลา ${removedRecords} รายการ${
+        removedEmployees > 0 ? `, ลบพนักงานตัวอย่าง ${removedEmployees} คน` : ''
+      } และรีเซ็ตยอดใช้ไปให้ตรงกับข้อมูลจริง`,
+    });
+
+    notifyListeners();
+    scheduleServerPush();
+    return { removedRecords, removedEmployees };
+  },
+
+  resetDatabase(_useDemo = true): void {
     localStorage.clear();
     initDatabase(true);
     notifyListeners();
+    scheduleServerPush();
   },
 };

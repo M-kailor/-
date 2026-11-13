@@ -12,7 +12,7 @@ import {
   LeaveRecord,
   LeaveType,
 } from '../types';
-import { dbService, subscribeToDB } from '../services/db';
+import { dbService, subscribeToDB, subscribeToSyncStatus } from '../services/db';
 import { getLeaveYear } from '../services/calculationEngine';
 import { useAuth } from './AuthContext';
 
@@ -26,6 +26,8 @@ interface DatabaseContextType {
   selectedYear: number;
   setSelectedYear: (year: number) => void;
   availableYears: number[];
+  isRealtimeConnected: boolean;
+  lastSyncedAt: number;
 
   // Actions
   createLeaveRecord: (params: {
@@ -37,6 +39,7 @@ interface DatabaseContextType {
     endTime?: string;
     reason: string;
     customHours?: number;
+    customHoursByDate?: Record<string, number>;
   }) => { success: boolean; record?: LeaveRecord; error?: string };
 
   cancelLeaveRecord: (recordId: string, reason: string) => { success: boolean; error?: string };
@@ -46,6 +49,10 @@ interface DatabaseContextType {
   setEntitlement: (employeeId: string, year: number, typeId: string, totalHours: number) => void;
   saveHoliday: (h: Holiday) => void;
   deleteHoliday: (id: string) => void;
+  clearDemoData: (options?: { clearAllLeaveRecords?: boolean; removeDemoEmployees?: boolean }) => {
+    removedRecords: number;
+    removedEmployees: number;
+  };
   resetDatabase: (useDemo?: boolean) => void;
   exportDatabaseJSON: () => string;
   importDatabaseJSON: (json: string) => { success: boolean; error?: string };
@@ -62,6 +69,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>(() => dbService.getLeaveRecords());
   const [holidays, setHolidays] = useState<Holiday[]>(() => dbService.getHolidays());
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => dbService.getAuditLogs());
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number>(0);
 
   // Default to 2027 based on current local date Nov 2026 -> Leave Year 2027
   const [selectedYear, setSelectedYear] = useState<number>(() => {
@@ -78,8 +87,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    const unsub = subscribeToDB(refreshAll);
-    return unsub;
+    const unsubDB = subscribeToDB(refreshAll);
+    const unsubSync = subscribeToSyncStatus(({ connected, lastSyncedAt: synced }) => {
+      setIsRealtimeConnected(connected);
+      setLastSyncedAt(synced);
+    });
+    return () => {
+      unsubDB();
+      unsubSync();
+    };
   }, []);
 
   // Compute list of available leave years in system
@@ -102,6 +118,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     endTime?: string;
     reason: string;
     customHours?: number;
+    customHoursByDate?: Record<string, number>;
   }) => {
     return dbService.createLeaveRecord(params, currentUser.id, currentUser.name);
   };
@@ -134,6 +151,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     dbService.deleteHoliday(id, currentUser.id, currentUser.name);
   };
 
+  const clearDemoData = (options?: {
+    clearAllLeaveRecords?: boolean;
+    removeDemoEmployees?: boolean;
+  }) => {
+    return dbService.clearDemoData(options, currentUser.id, currentUser.name);
+  };
+
   const resetDatabase = (useDemo = true) => {
     dbService.resetDatabase(useDemo);
   };
@@ -158,6 +182,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         selectedYear,
         setSelectedYear,
         availableYears,
+        isRealtimeConnected,
+        lastSyncedAt,
         createLeaveRecord,
         cancelLeaveRecord,
         saveEmployee,
@@ -166,6 +192,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setEntitlement,
         saveHoliday,
         deleteHoliday,
+        clearDemoData,
         resetDatabase,
         exportDatabaseJSON,
         importDatabaseJSON,

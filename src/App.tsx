@@ -19,16 +19,30 @@ import { ReportsView } from './components/reports/ReportsView';
 import { AuditLogView } from './components/audit/AuditLogView';
 import { AcceptanceTestView } from './components/tests/AcceptanceTestView';
 import { SettingsView } from './components/settings/SettingsView';
-import { Menu, X, ShieldAlert } from 'lucide-react';
+import { Menu, X, Radio, ArrowLeft } from 'lucide-react';
 
 function MainApp() {
   const [currentTab, setCurrentTab] = useState<NavigationTab>('dashboard');
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isShareMode, setIsShareMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('share') === 'live';
+  });
+
+  const handleToggleShareMode = (enable: boolean) => {
+    setIsShareMode(enable);
+    if (enable) {
+      setCurrentTab('dashboard');
+      window.history.replaceState(null, '', '/?share=live');
+    } else {
+      window.history.replaceState(null, '', '/');
+    }
+  };
 
   const handleSelectTab = (tab: NavigationTab) => {
     if (tab === 'request_leave') {
-      setIsLeaveModalOpen(true);
+      if (!isShareMode) setIsLeaveModalOpen(true);
       return;
     }
     setCurrentTab(tab);
@@ -36,8 +50,30 @@ function MainApp() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans antialiased text-slate-800">
+      {isShareMode && (
+        <div className="bg-emerald-900 text-white text-xs px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Radio className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+            <span className="font-semibold">
+              โหมดแชร์ข้อมูล Real-Time (Live Read-Only View) — อัปเดตอัตโนมัติทันทีที่มีการเปลี่ยนแปลง
+            </span>
+          </div>
+          <button
+            onClick={() => handleToggleShareMode(false)}
+            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-semibold cursor-pointer"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <span>ออกจากโหมดแชร์</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Header */}
-      <Header onOpenLeaveModal={() => setIsLeaveModalOpen(true)} />
+      <Header
+        onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
+        isShareMode={isShareMode}
+        onToggleSharePreview={handleToggleShareMode}
+      />
 
       {/* Main Container: Sidebar + Content */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto relative">
@@ -57,6 +93,7 @@ function MainApp() {
           onSelectTab={handleSelectTab}
           isMobileOpen={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          isShareMode={isShareMode}
         />
 
         {/* Mobile Backdrop */}
@@ -73,44 +110,50 @@ function MainApp() {
             <DashboardView
               onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
               onNavigateHistory={() => setCurrentTab('history')}
+              isShareMode={isShareMode}
             />
           )}
 
           {currentTab === 'history' && (
-            <LeaveHistoryView onOpenLeaveModal={() => setIsLeaveModalOpen(true)} />
+            <LeaveHistoryView
+              onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
+              isShareMode={isShareMode}
+            />
           )}
 
-          {currentTab === 'employees' && (
+          {currentTab === 'employees' && !isShareMode && (
             <EmployeeListView
               onOpenEntitlements={() => setCurrentTab('entitlements')}
               onOpenLeaveModalFor={() => setIsLeaveModalOpen(true)}
             />
           )}
 
-          {currentTab === 'entitlements' && <EntitlementView />}
+          {currentTab === 'entitlements' && !isShareMode && <EntitlementView />}
 
-          {currentTab === 'leave_types' && <LeaveTypeView />}
+          {currentTab === 'leave_types' && !isShareMode && <LeaveTypeView />}
 
           {currentTab === 'holidays' && <HolidayView />}
 
           {currentTab === 'reports' && <ReportsView />}
 
-          {currentTab === 'audit_logs' && <AuditLogView />}
+          {currentTab === 'audit_logs' && !isShareMode && <AuditLogView />}
 
           {currentTab === 'acceptance_tests' && <AcceptanceTestView />}
 
-          {currentTab === 'settings' && <SettingsView />}
+          {currentTab === 'settings' && !isShareMode && <SettingsView />}
         </main>
       </div>
 
       {/* Global Leave Request Modal */}
-      <LeaveRequestModal
-        isOpen={isLeaveModalOpen}
-        onClose={() => setIsLeaveModalOpen(false)}
-        onSuccess={() => {
-          // If user was on another tab, optionally switch to history or stay on dashboard
-        }}
-      />
+      {!isShareMode && (
+        <LeaveRequestModal
+          isOpen={isLeaveModalOpen}
+          onClose={() => setIsLeaveModalOpen(false)}
+          onSuccess={() => {
+            // Live sync handles refreshing across views
+          }}
+        />
+      )}
     </div>
   );
 }

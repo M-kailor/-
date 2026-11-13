@@ -97,7 +97,7 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* 1. Pie / Donut Chart */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
         <div className="flex items-center justify-between mb-2">
@@ -169,67 +169,7 @@ export const LeaveCharts: React.FC<LeaveChartsProps> = ({
         )}
       </div>
 
-      {/* 2. Bar Chart: Entitlement vs Used */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-            เปรียบเทียบสิทธิและการใช้จริง (Entitlement vs Used)
-          </h4>
-          <span className="text-[10px] text-slate-400">หน่วย: วัน (ชั่วโมง)</span>
-        </div>
-
-        <div className="space-y-3.5 my-auto">
-          {barData.map((item) => {
-            const usedPct = item.total > 0 ? (item.used / item.total) * 100 : 0;
-            return (
-              <div key={item.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs flex-wrap gap-1">
-                  <span className="font-semibold text-slate-800">{item.name}</span>
-                  <div className="space-x-1.5 text-[11px]">
-                    <span className="text-amber-600 font-bold">
-                      ใช้ {(item.used / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.used} ชม.)
-                    </span>
-                    <span className="text-slate-300">/</span>
-                    <span className="text-slate-500">
-                      สิทธิ {(item.total / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.total} ชม.)
-                    </span>
-                    <span className="text-emerald-600 font-semibold">
-                      (เหลือ {(item.remaining / 8).toFixed(1).replace(/\.0$/, '')} วัน ({item.remaining} ชม.))
-                    </span>
-                  </div>
-                </div>
-
-                {/* Dual Bar */}
-                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                  <div
-                    className="h-full rounded-l-full bg-amber-500 transition-all duration-300"
-                    style={{ width: `${Math.min(usedPct, 100)}%` }}
-                    title={`ใช้ไป ${item.used} ชม.`}
-                  />
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-300"
-                    style={{ width: `${Math.max(0, 100 - usedPct)}%` }}
-                    title={`คงเหลือ ${item.remaining} ชม.`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-center space-x-5 text-[11px] pt-3 border-t border-slate-100 text-slate-500">
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />
-            <span>ใช้ไปแล้ว (Used)</span>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-            <span>คงเหลือ (Remaining)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Monthly Trend Chart: Nov to Oct */}
+      {/* Monthly Trend Chart: Nov to Oct */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">

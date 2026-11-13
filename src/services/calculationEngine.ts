@@ -111,13 +111,14 @@ export interface CalculationInput {
   leaveType: LeaveType;
   holidays: Holiday[];
   customHours?: number; // Optional manual override for single-day partial hours
+  customHoursByDate?: Record<string, number>; // Optional per-day override for multi-day leave
 }
 
 /**
  * Calculate leave hours, validate rules, and build day-by-day breakdown
  */
 export function calculateLeave(input: CalculationInput): LeaveCalculationResult {
-  const { startDate, endDate, leaveType, holidays, customHours } = input;
+  const { startDate, endDate, leaveType, holidays, customHours, customHoursByDate } = input;
 
   if (!startDate || !endDate) {
     return {
@@ -213,9 +214,43 @@ export function calculateLeave(input: CalculationInput): LeaveCalculationResult 
       note = `วันหยุดบริษัท: ${holiday.name} (ไม่นับชั่วโมงลา)`;
     } else {
       // It is a valid working day
-      if (isSingleDay && customHours !== undefined && customHours > 0) {
+      const perDayHours = customHoursByDate?.[dateStr];
+      if (!isSingleDay && perDayHours !== undefined) {
+        if (perDayHours <= 0 || perDayHours > 8) {
+          return {
+            isValid: false,
+            errorMessage: `ชั่วโมงลาวันที่ ${formatDateThai(dateStr)} ต้องอยู่ระหว่าง ${leaveType.minUnitHours || 0.5} ถึง 8 ชั่วโมง`,
+            leaveYear: startLeaveYear,
+            totalWorkingHours: 0,
+            equivalentDays: 0,
+            dayBreakdown,
+            crossesLeaveYear: false,
+          };
+        }
+        const minUnit = leaveType.minUnitHours || 0.5;
+        const dayRem = Math.round((perDayHours % minUnit) * 1000) / 1000;
+        if (perDayHours < minUnit || (dayRem !== 0 && dayRem !== minUnit)) {
+          return {
+            isValid: false,
+            errorMessage: `วันที่ ${formatDateThai(dateStr)}: "${leaveType.name}" ต้องลาขั้นต่ำ ${minUnit} ชม. และเป็นจำนวนเท่าของ ${minUnit} ชม.`,
+            leaveYear: startLeaveYear,
+            totalWorkingHours: 0,
+            equivalentDays: 0,
+            dayBreakdown,
+            crossesLeaveYear: false,
+          };
+        }
+        dayHours = perDayHours;
+        if (perDayHours === 8) {
+          note = 'ลางานเต็มวัน (8 ชม.)';
+        } else if (perDayHours === 4) {
+          note = 'ลาครึ่งวัน (4 ชม.)';
+        } else {
+          note = `ลาบางส่วน (${perDayHours} ชม.)`;
+        }
+      } else if (isSingleDay && customHours !== undefined && customHours > 0) {
         dayHours = customHours;
-        note = `ลาบางส่วน (${customHours} ชม.)`;
+        note = customHours === 8 ? 'ลางานเต็มวัน (8 ชม.)' : customHours === 4 ? 'ลาครึ่งวัน (4 ชม.)' : `ลาบางส่วน (${customHours} ชม.)`;
       } else {
         dayHours = 8; // Standard 8 hours per day
         note = 'ลางานเต็มวัน (8 ชม.)';
